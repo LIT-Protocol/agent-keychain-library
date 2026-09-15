@@ -1,0 +1,58 @@
+{
+  "name": "@lit-protocol/agent-keychain-library",
+  "version": "0.1.0",
+  "description": "Open catalog of \"use inside Lit\" actions for Lit Agent Keychain: manifests and projection code that let agents use a credential inside a TEE without ever seeing it",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LIT-Protocol/agent-keychain-library.git"
+  },
+  "homepage": "https://github.com/LIT-Protocol/agent-keychain-library#readme",
+  "exports": {
+    "./lib": "./lib.ts",
+    "./shape": "./shape.ts",
+    "./schema": "./schema.ts",
+    "./lint": "./lint.ts",
+    "./testing": "./testing.ts",
+    "./actions/*": "./actions/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "actions",
+    "lib.ts",
+    "shape.ts",
+    "schema.ts",
+    "lint.ts",
+    "testing.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "tsx scripts/check.ts",
+    "test": "npm run check && tsc --noEmit && tsx --test tests/*.test.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "prettier": "3.9.6",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "zod": "4.3.6"
+  },
+  "keywords": [
+    "lit-protocol",
+    "keychain",
+    "agents",
+    "secrets",
+    "tee",
+    "mcp"
+  ]
+}
