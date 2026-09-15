@@ -11,7 +11,9 @@
    `tests/actions.test.ts` covering: the exact request you send, the projected
    result, an upstream failure, and that the credential never appears in the
    serialized result.
-5. `npm ci && npm test && npm run format:check`.
+5. `npm ci && npm test && npm run format:check`. If you touched `lib.ts`, `shape.ts`,
+   `schema.ts`, `lint.ts` or `testing.ts`, also run `npm run build` and commit `dist/`
+   (Keychain consumes this repo as a source tarball, so compiled helpers ship in git).
 6. Open a PR; the template carries the review checklist. Start with
    `"tier": "community"`. Maintainers promote to `verified` (shown in the Keychain
    web UI) after review; both tiers are callable from the SDK, CLI and MCP server.

@@ -10,16 +10,32 @@
   },
   "homepage": "https://github.com/LIT-Protocol/agent-keychain-library#readme",
   "exports": {
-    "./lib": "./lib.ts",
-    "./shape": "./shape.ts",
-    "./schema": "./schema.ts",
-    "./lint": "./lint.ts",
-    "./testing": "./testing.ts",
+    "./lib": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    },
+    "./shape": {
+      "types": "./dist/shape.d.ts",
+      "default": "./dist/shape.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "default": "./dist/schema.js"
+    },
+    "./lint": {
+      "types": "./dist/lint.d.ts",
+      "default": "./dist/lint.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
     "./actions/*": "./actions/*",
     "./package.json": "./package.json"
   },
   "files": [
     "actions",
+    "dist",
     "lib.ts",
     "shape.ts",
     "schema.ts",
@@ -30,6 +46,7 @@
   ],
   "scripts": {
     "check": "tsx scripts/check.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "npm run check && tsc --noEmit && tsx --test tests/*.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
