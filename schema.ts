@@ -14,10 +14,30 @@ import {
 export * from "./shape.ts";
 
 const longText = z.string().min(1).max(400);
+// An exact lowercase hostname, or `*.` followed by at least two labels: the
+// wildcard stands for exactly one label, for providers that give every tenant
+// its own subdomain (`*.supabase.co`). The action still decides which subdomain
+// it contacts, normally from the stored credential; the wildcard only widens the
+// harness's allowlist to that provider's namespace, never to another domain.
 const hostSchema = z
   .string()
   .max(253)
-  .regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/);
+  .regex(/^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/)
+  .refine(
+    (h) => !h.startsWith("*.") || h.indexOf(".", 2) !== -1,
+    "a wildcard host needs at least two labels after the *.",
+  );
+/** True when `hostname` is permitted by an `allowedHosts` list (exact match, or one label under a `*.` entry). */
+export function hostAllowed(hosts: readonly string[], hostname: string) {
+  return hosts.some((h) => {
+    if (!h.startsWith("*.")) return h === hostname;
+    const suffix = h.slice(1);
+    if (!hostname.endsWith(suffix)) return false;
+    return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
+      hostname.slice(0, hostname.length - suffix.length),
+    );
+  });
+}
 const useDefinition = z.strictObject({
   v: z.literal(CATALOG_FORMAT),
   id: releaseIdSchema,

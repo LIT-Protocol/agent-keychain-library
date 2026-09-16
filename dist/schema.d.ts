@@ -1,5 +1,7 @@
 import { z } from "zod";
 export * from "./shape.ts";
+/** True when `hostname` is permitted by an `allowedHosts` list (exact match, or one label under a `*.` entry). */
+export declare function hostAllowed(hosts: readonly string[], hostname: string): boolean;
 declare const useDefinition: z.ZodObject<{
     v: z.ZodLiteral<1>;
     id: z.ZodString;

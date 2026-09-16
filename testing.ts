@@ -3,7 +3,7 @@
 // harness does (host allowlist, HTTPS only, request budget, input and output
 // shapes) against an in-memory upstream you supply. It is for tests only.
 import { shapeToZod, MAX_OUTPUT_BYTES } from "./shape.ts";
-import type { UseDefinition } from "./schema.ts";
+import { hostAllowed, type UseDefinition } from "./schema.ts";
 import type { ActionContext, ActionRequestInit, ActionUse } from "./lib.ts";
 
 export type Upstream = (
@@ -22,14 +22,13 @@ export function mockContext(
   input: unknown,
   upstream: Upstream,
 ): ActionContext & { calls: { url: string; method: string }[] } {
-  const allowed = new Set(definition.allowedHosts);
   const calls: { url: string; method: string }[] = [];
   let requests = 0;
   const fetchText = async (url: string, init: ActionRequestInit = {}) => {
     const target = new URL(String(url));
     if (
       target.protocol !== "https:" ||
-      !allowed.has(target.hostname) ||
+      !hostAllowed(definition.allowedHosts, target.hostname) ||
       target.username !== "" ||
       target.password !== "" ||
       target.port !== ""

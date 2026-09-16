@@ -6,6 +6,7 @@ import {
   definitionSchema,
   shapeToZod,
   shapeToJsonSchema,
+  hostAllowed,
   type Catalog,
 } from "../schema.ts";
 import { lintActionSource } from "../lint.ts";
@@ -98,7 +99,11 @@ test("manifest rejections: bad host, float input, get operation, unknown field",
   assert.ok(definitionSchema.safeParse(base).success);
   for (const mutate of [
     (d: any) => (d.allowedHosts = ["https://api.example.com"]),
-    (d: any) => (d.allowedHosts = ["*.example.com"]),
+    (d: any) => (d.allowedHosts = ["*.com"]),
+    (d: any) => (d.allowedHosts = ["a.*.example.com"]),
+    (d: any) => (d.allowedHosts = ["*.*.example.com"]),
+    (d: any) => (d.allowedHosts = ["**.example.com"]),
+    (d: any) => (d.allowedHosts = ["*example.com"]),
     (d: any) =>
       (d.input = {
         type: "object",
@@ -113,4 +118,23 @@ test("manifest rejections: bad host, float input, get operation, unknown field",
     mutate(d);
     assert.ok(!definitionSchema.safeParse(d).success);
   }
+});
+test("wildcard hosts stand for exactly one label under the provider's domain", () => {
+  const base = JSON.parse(
+    '{"v":1,"id":"demo_action","kind":"use","name":"Demo","description":"Demo action.","category":"other","author":"t","license":"MIT","operation":"demo.run","credentialPattern":"^x+$","allowedHosts":["*.example.com"],"input":null,"output":{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"]},"limits":{"timeoutMs":5000,"maxResponseBytes":4096,"maxRequests":1},"ui":{"label":"Demo","hint":"Demo.","placeholder":"DEMO_KEY"},"tier":"community","deprecated":false}',
+  );
+  assert.ok(definitionSchema.safeParse(base).success);
+  const hosts = ["api.exact.test", "*.example.com"];
+  for (const ok of ["api.exact.test", "tenant.example.com", "a-1.example.com"])
+    assert.ok(hostAllowed(hosts, ok), ok);
+  for (const bad of [
+    "example.com",
+    ".example.com",
+    "a.b.example.com",
+    "tenant.example.com.evil.test",
+    "-.example.com",
+    "sub.api.exact.test",
+    "API.exact.test",
+  ])
+    assert.ok(!hostAllowed(hosts, bad), bad);
 });

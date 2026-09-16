@@ -1,4 +1,4 @@
-import type { UseDefinition } from "./schema.ts";
+import { type UseDefinition } from "./schema.ts";
 import type { ActionContext, ActionRequestInit, ActionUse } from "./lib.ts";
 export type Upstream = (url: URL, init: Required<Pick<ActionRequestInit, "method" | "headers">> & {
     body?: string;

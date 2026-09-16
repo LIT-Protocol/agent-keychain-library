@@ -208,3 +208,268 @@ test("the mock harness enforces the host allowlist and request budget like the r
     /pattern/,
   );
 });
+test("supabase_tables: select builds a PostgREST query from allowlisted identifiers only", async () => {
+  const { run, credential } = await load("supabase_tables");
+  const key = JSON.parse(credential).key;
+  const { result, calls, serialized } = await run(
+    {
+      table: "orders",
+      operation: "select",
+      columns: ["id", "status"],
+      filters: [
+        { column: "status", op: "in", values: ['pa"id', "open"] },
+        { column: "id", op: "gt", value: "10" },
+      ],
+      order: { column: "created_at", direction: "desc" },
+      limit: 500,
+    },
+    (url, init) => {
+      assert.equal(url.origin, "https://abcdefghijklmnopqrst.supabase.co");
+      assert.equal(url.pathname, "/rest/v1/orders");
+      assert.equal(url.searchParams.get("select"), "id,status");
+      assert.equal(url.searchParams.get("status"), 'in.("pa\\"id","open")');
+      assert.equal(url.searchParams.get("id"), "gt.10");
+      assert.equal(url.searchParams.get("order"), "created_at.desc");
+      // Capped by the owner's maxRows, not the agent's limit.
+      assert.equal(url.searchParams.get("limit"), "50");
+      assert.equal(init.method, "GET");
+      assert.equal(init.headers.apikey, key);
+      assert.equal(init.headers.Authorization, undefined);
+      assert.equal(init.headers["Accept-Profile"], "public");
+      return json([
+        { id: 11, status: "open", secret: key, email: "a@b.c" },
+        { id: 12, status: "paid" },
+      ]);
+    },
+  );
+  assert.deepEqual(result, {
+    rows: ['{"id":11,"status":"open"}', '{"id":12,"status":"paid"}'],
+    count: 2,
+    truncated: false,
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(!serialized.includes(key));
+  assert.ok(!serialized.includes("a@b.c"));
+});
+test("supabase_tables: legacy service_role JWTs also go on the Authorization header", async () => {
+  const { definition, use } = await load("supabase_tables");
+  const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(40) + "." + "b".repeat(43);
+  const credential = JSON.stringify({
+    ref: "abcdefghijklmnopqrst",
+    key: jwt,
+    schema: "crm",
+    tables: { people: { select: ["id"] } },
+  });
+  const { result } = await runAction(
+    definition,
+    use,
+    credential,
+    { table: "people", operation: "select" },
+    (url, init) => {
+      assert.equal(url.searchParams.get("select"), "id");
+      assert.equal(url.searchParams.get("limit"), "100");
+      assert.equal(init.headers.apikey, jwt);
+      assert.equal(init.headers.Authorization, `Bearer ${jwt}`);
+      assert.equal(init.headers["Accept-Profile"], "crm");
+      return json([{ id: 1 }]);
+    },
+  );
+  assert.deepEqual((result as any).rows, ['{"id":1}']);
+});
+test("supabase_tables: requests outside the owner's allowlist are denied before any call", async () => {
+  const { run } = await load("supabase_tables");
+  const denied: unknown[] = [
+    { table: "users", operation: "select" },
+    { table: "orders", operation: "select", columns: ["email"] },
+    { table: "orders", operation: "select", columns: [] },
+    {
+      table: "orders",
+      operation: "select",
+      filters: [{ column: "total_cents", op: "gt", value: "1" }],
+    },
+    {
+      table: "orders",
+      operation: "select",
+      filters: [{ column: "id", op: "is", value: "1" }],
+    },
+    {
+      table: "orders",
+      operation: "select",
+      filters: [{ column: "id", op: "in", value: "1" }],
+    },
+    {
+      table: "orders",
+      operation: "select",
+      filters: [{ column: "id", op: "eq", values: ["1"] }],
+    },
+    { table: "orders", operation: "select", order: { column: "email" } },
+    { table: "orders", operation: "select", columns: ["id", "status(*)"] },
+    {
+      table: "orders",
+      operation: "select",
+      rows: [{ values: [{ column: "status", value: '"x"' }] }],
+    },
+    {
+      table: "orders",
+      operation: "insert",
+      rows: [{ values: [{ column: "total_cents", value: "1" }] }],
+    },
+    {
+      table: "orders",
+      operation: "insert",
+      rows: [{ values: [{ column: "status", value: '{"a":1}' }] }],
+    },
+    {
+      table: "orders",
+      operation: "insert",
+      rows: [{ values: [{ column: "status", value: "not json" }] }],
+    },
+    { table: "orders", operation: "insert", rows: [] },
+    { table: "orders", operation: "insert", rows: [{ values: [] }] },
+    {
+      table: "orders",
+      operation: "insert",
+      limit: 1,
+      rows: [{ values: [{ column: "status", value: '"x"' }] }],
+    },
+    { table: "orders", operation: "delete" },
+    { table: "orders", operation: "select", url: "https://evil.test" },
+    { table: "Orders", operation: "select" },
+  ];
+  for (const input of denied) {
+    let called = false;
+    await assert.rejects(
+      run(input, () => {
+        called = true;
+        return json([]);
+      }),
+      JSON.stringify(input),
+    );
+    assert.equal(called, false, JSON.stringify(input));
+  }
+});
+test("supabase_tables: insert sends typed JSON for allowlisted columns and projects the returned rows", async () => {
+  const { run, credential } = await load("supabase_tables");
+  const key = JSON.parse(credential).key;
+  const { result } = await run(
+    {
+      table: "notes",
+      operation: "insert",
+      rows: [
+        {
+          values: [
+            { column: "body", value: '"hello"' },
+            { column: "order_id", value: "7" },
+          ],
+        },
+        { values: [{ column: "body", value: "null" }] },
+      ],
+    },
+    (url, init) => {
+      assert.equal(
+        url.href,
+        "https://abcdefghijklmnopqrst.supabase.co/rest/v1/notes",
+      );
+      assert.equal(init.method, "POST");
+      assert.equal(init.headers.Prefer, "return=representation");
+      assert.equal(init.headers["Content-Profile"], "public");
+      assert.equal(init.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(init.body!), [
+        { body: "hello", order_id: 7 },
+        { body: null },
+      ]);
+      return json([
+        { id: 1, body: "hello", order_id: 7, owner_key: key },
+        { id: 2, body: null, order_id: null },
+      ]);
+    },
+  );
+  assert.deepEqual(result, {
+    rows: ['{"id":1,"body":"hello"}', '{"id":2,"body":null}'],
+    count: 2,
+    truncated: false,
+  });
+});
+test("supabase_tables: oversized results are truncated to fit the output cap, and malformed configs are refused", async () => {
+  const { run, definition, use } = await load("supabase_tables");
+  const wide = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    body: "é".repeat(600),
+  }));
+  const { result, serialized } = await run(
+    { table: "notes", operation: "select" },
+    () => json(wide),
+  );
+  const out = result as { rows: string[]; count: number; truncated: boolean };
+  assert.equal(out.truncated, true);
+  assert.equal(out.count, 50);
+  assert.ok(out.rows.length > 0 && out.rows.length < 50);
+  assert.ok(new TextEncoder().encode(serialized).byteLength <= 16 * 1024);
+  // More rows than the owner's cap means the upstream ignored our limit; deny.
+  await assert.rejects(
+    run({ table: "orders", operation: "select" }, () =>
+      json(Array.from({ length: 51 }, (_, i) => ({ id: i }))),
+    ),
+  );
+  await assert.rejects(
+    run({ table: "orders", operation: "select" }, () => json({ rows: [] })),
+  );
+  await assert.rejects(
+    run({ table: "orders", operation: "select" }, () => json([], 401)),
+  );
+  const bad = [
+    {
+      ref: "abcdefghijklmnopqrst",
+      key: "sb_secret_" + "k".repeat(40),
+      tables: {},
+    },
+    {
+      ref: "ABCDEFGHIJKLMNOPQRST",
+      key: "sb_secret_" + "k".repeat(40),
+      tables: { t: { select: ["id"] } },
+    },
+    {
+      ref: "abcdefghijklmnopqrst",
+      key: "sb_publishable_" + "k".repeat(40),
+      tables: { t: { select: ["id"] } },
+    },
+    {
+      ref: "abcdefghijklmnopqrst",
+      key: "sb_secret_" + "k".repeat(40),
+      tables: { t: { select: [] } },
+    },
+    {
+      ref: "abcdefghijklmnopqrst",
+      key: "sb_secret_" + "k".repeat(40),
+      tables: { t: { select: ["id"], maxRows: 5000 } },
+    },
+    {
+      ref: "abcdefghijklmnopqrst",
+      key: "sb_secret_" + "k".repeat(40),
+      tables: { t: { select: ["id"], extra: 1 } },
+    },
+    {
+      ref: "abcdefghijklmnopqrst",
+      key: "sb_secret_" + "k".repeat(40),
+      host: "evil.test",
+      tables: { t: { select: ["id"] } },
+    },
+  ];
+  for (const config of bad) {
+    let called = false;
+    await assert.rejects(
+      runAction(
+        definition,
+        use,
+        JSON.stringify(config),
+        { table: "t", operation: "select" },
+        () => {
+          called = true;
+          return json([]);
+        },
+      ),
+      JSON.stringify(config),
+    );
+    assert.equal(called, false);
+  }
+});

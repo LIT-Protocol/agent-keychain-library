@@ -1,0 +1,168 @@
+{
+  "v": 1,
+  "id": "supabase_tables",
+  "kind": "use",
+  "name": "Query Supabase tables",
+  "description": "Reads rows from, or inserts rows into, the tables and columns the owner allowlisted when storing the credential. Uses the project's own PostgREST endpoint with the stored secret or service_role key, which bypasses row level security; the allowlist in the credential is the policy. The key never leaves the enclave.",
+  "category": "data",
+  "author": "Lit Protocol",
+  "license": "Apache-2.0",
+  "operation": "supabase.tables",
+  "credentialPattern": "^\\s*\\{[\\s\\S]{40,8000}\\}\\s*$",
+  "allowedHosts": ["*.supabase.co"],
+  "input": {
+    "type": "object",
+    "properties": {
+      "table": {
+        "type": "string",
+        "maxLength": 63,
+        "pattern": "^[a-z_][a-z0-9_]{0,62}$",
+        "description": "A table the owner allowlisted"
+      },
+      "operation": {
+        "type": "string",
+        "maxLength": 6,
+        "enum": ["select", "insert"]
+      },
+      "columns": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^[a-z_][a-z0-9_]{0,62}$"
+        },
+        "description": "Columns to return; defaults to every allowlisted column"
+      },
+      "filters": {
+        "type": "array",
+        "maxItems": 16,
+        "items": {
+          "type": "object",
+          "properties": {
+            "column": {
+              "type": "string",
+              "maxLength": 63,
+              "pattern": "^[a-z_][a-z0-9_]{0,62}$"
+            },
+            "op": {
+              "type": "string",
+              "maxLength": 5,
+              "enum": [
+                "eq",
+                "neq",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "like",
+                "ilike",
+                "is",
+                "in"
+              ]
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "Literal for every op except in; for is: null, true or false"
+            },
+            "values": {
+              "type": "array",
+              "maxItems": 100,
+              "items": { "type": "string", "maxLength": 256 },
+              "description": "Literals for the in op"
+            }
+          },
+          "required": ["column", "op"]
+        }
+      },
+      "order": {
+        "type": "object",
+        "properties": {
+          "column": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z_][a-z0-9_]{0,62}$"
+          },
+          "direction": {
+            "type": "string",
+            "maxLength": 4,
+            "enum": ["asc", "desc"]
+          }
+        },
+        "required": ["column"]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000,
+        "description": "Capped by the owner's maxRows for the table (default 100)"
+      },
+      "rows": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "column": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "pattern": "^[a-z_][a-z0-9_]{0,62}$"
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "description": "JSON-encoded string, number, boolean or null"
+                  }
+                },
+                "required": ["column", "value"]
+              }
+            }
+          },
+          "required": ["values"]
+        },
+        "description": "Rows to insert; each value is JSON-encoded"
+      }
+    },
+    "required": ["table", "operation"]
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "rows": {
+        "type": "array",
+        "maxItems": 1000,
+        "items": { "type": "string", "maxLength": 16384 },
+        "description": "Each row as a JSON object string holding only allowlisted columns"
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Rows the database returned, before any output truncation"
+      },
+      "truncated": {
+        "type": "boolean",
+        "description": "True when rows were dropped to fit the 16 KiB result limit"
+      }
+    },
+    "required": ["rows", "count", "truncated"]
+  },
+  "limits": {
+    "timeoutMs": 10000,
+    "maxResponseBytes": 524288,
+    "maxRequests": 1
+  },
+  "ui": {
+    "label": "Query Supabase tables inside Lit",
+    "hint": "Paste a JSON config: project ref, secret key, and per-table allowlists of columns agents may read, filter on or insert. The key is never revealed; the action reaches only your project's REST endpoint.",
+    "placeholder": "SUPABASE_TABLE_ACCESS"
+  },
+  "tier": "verified",
+  "deprecated": false
+}
