@@ -14,13 +14,14 @@ server all read this catalog, so a merged action appears in the owner's "How age
 may use it" dropdown, in `keychain actions`, and as an MCP tool once Keychain bumps
 its pinned version. Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-| Action               | Provider | Agents get back                                   |
-| -------------------- | -------- | ------------------------------------------------- |
-| `stripe_balance`     | Stripe   | available/pending balances, live-mode flag        |
-| `openai_chat`        | OpenAI   | assistant reply, finish reason, token usage       |
-| `github_read_file`   | GitHub   | decoded text, size and blob SHA of one file       |
-| `slack_post_message` | Slack    | channel id and message timestamp                  |
-| `export`             | (none)   | the value itself, re-encrypted to the agent's key |
+| Action               | Provider | Agents get back                                    |
+| -------------------- | -------- | -------------------------------------------------- |
+| `stripe_balance`     | Stripe   | available/pending balances, live-mode flag         |
+| `openai_chat`        | OpenAI   | assistant reply, finish reason, token usage        |
+| `github_read_file`   | GitHub   | decoded text, size and blob SHA of one file        |
+| `slack_post_message` | Slack    | channel id and message timestamp                   |
+| `supabase_tables`    | Supabase | rows read from or inserted into allowlisted tables |
+| `export`             | (none)   | the value itself, re-encrypted to the agent's key  |
 
 ## How an action is bounded
 
@@ -81,7 +82,10 @@ effects the owner would not expect. That is what review is for; see the checklis
 - `category`: `payments`, `ai`, `developer`, `messaging`, `data` or `other`.
 - `credentialPattern`: a JavaScript regular expression the plaintext must match.
   Make it as specific as the provider allows so a mis-filed credential is refused.
-- `allowedHosts`: 1 to 8 lowercase hostnames. No wildcards, ports or paths.
+- `allowedHosts`: 1 to 8 lowercase hostnames. No ports or paths. An entry may start
+  with `*.` to stand for exactly one label under a provider that gives every tenant
+  its own subdomain (`*.supabase.co`); the code must still derive that subdomain
+  from the stored credential, never from agent input.
 - `input`: a shape or `null`. Inputs are part of the agent's signed request, so they
   must be canonical JSON: object keys `^[a-z][A-Za-z0-9]{0,63}$`, integers not
   floats, at most 8 KiB.
@@ -92,6 +96,18 @@ effects the owner would not expect. That is what review is for; see the checklis
   the web UI until promoted by a maintainer.
 - `deprecated`: hides the action for new secrets. Existing secrets keep working and
   can still be restored from backups. **Never delete a directory.**
+
+### Structured credentials
+
+When the provider's key is all-or-nothing (a Supabase `service_role` key bypasses
+row level security), the owner's policy has to live somewhere the agent cannot
+change it. Store it in the credential: the owner pastes a small JSON object holding
+the key together with the allowlist (tables, columns, caps), and the action parses
+and validates it before building any request. The whole object is sealed to the
+enclave and covered by the owner's envelope receipt, so the policy is as tamper-proof
+as the key. `credentialPattern` can only say "this is a JSON object of bounded
+size"; the action must reject unknown fields and enforce every rule itself.
+`supabase_tables` is the reference example.
 
 ### Shapes
 

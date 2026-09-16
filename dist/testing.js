@@ -3,15 +3,15 @@
 // harness does (host allowlist, HTTPS only, request budget, input and output
 // shapes) against an in-memory upstream you supply. It is for tests only.
 import { shapeToZod, MAX_OUTPUT_BYTES } from "./shape.js";
+import { hostAllowed } from "./schema.js";
 const METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 export function mockContext(definition, credential, input, upstream) {
-    const allowed = new Set(definition.allowedHosts);
     const calls = [];
     let requests = 0;
     const fetchText = async (url, init = {}) => {
         const target = new URL(String(url));
         if (target.protocol !== "https:" ||
-            !allowed.has(target.hostname) ||
+            !hostAllowed(definition.allowedHosts, target.hostname) ||
             target.username !== "" ||
             target.password !== "" ||
             target.port !== "")
